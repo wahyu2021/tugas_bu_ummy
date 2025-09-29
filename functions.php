@@ -121,9 +121,19 @@ function get_product_images(int $productId): array {
   $stmt->execute([$productId]);
   return $stmt->fetchAll();
 }
+
 function product_image_url(?string $path): string {
-  if ($path && trim($path) !== '') return $path;
-  // fallback placeholder
+  // Jika path ada dan bukan URL eksternal, arahkan ke folder uploads
+  if ($path && trim($path) !== '') {
+    // Cek apakah path adalah URL lengkap
+    if (filter_var($path, FILTER_VALIDATE_URL)) {
+        return $path; // Jika sudah URL, kembalikan langsung
+    }
+    // Jika bukan URL, anggap itu adalah file di folder uploads
+    return 'uploads/' . $path; 
+  }
+  
+  // fallback placeholder jika tidak ada gambar
   return 'https://via.placeholder.com/640x480?text=No+Image';
 }
 

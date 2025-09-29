@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 include __DIR__ . '/partials/header.php';
 ?>
 <h1 class="text-3xl font-bold mb-6"><?php echo $id ? 'Edit Kategori' : 'Tambah Kategori'; ?></h1>
-<form method="post" class="bg-surface p-6 rounded-xl border border-slate-700/50 max-w-lg space-y-4">
+<form method="post" class="bg-surface p-6 rounded-xl border border-slate-700/50 w-2xl space-y-4">
   <?php echo csrf_input(); ?>
   <div>
     <label class="block text-sm font-medium mb-1">Nama Kategori</label>
