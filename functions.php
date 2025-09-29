@@ -27,7 +27,8 @@ function current_user(): ?array {
 }
 function require_login(): void {
   if (!current_user()) {
-    header('Location: login.php?next='.urlencode($_SERVER['REQUEST_URI'] ?? 'index.php'));
+    $next = $_SERVER['REQUEST_URI'] ?? 'index.php';
+    header('Location: login.php?next=' . urlencode($next));
     exit;
   }
 }
@@ -44,11 +45,13 @@ function login(string $email, string $password): bool {
       'id' => (int)$user['id'],
       'name' => $user['name'],
       'email' => $user['email'],
+      'is_admin' => (bool)$user['is_admin'], // Tambahkan ini
     ];
     return true;
   }
   return false;
 }
+
 function register_user(string $name, string $email, string $password): array {
   if (find_user_by_email($email)) {
     return [false, 'Email sudah terdaftar'];
@@ -191,7 +194,7 @@ function place_order(int $userId): array {
       $stock = (int)($stmt->fetch()['stock'] ?? 0);
       if ($stock < $it['qty']) {
         $pdo->rollBack();
-        return [false, 'Stok tidak mencukupi untuk: '.$it['name']];
+        return [false, 'Stok tidak mencukupi untuk: '.esc($it['name'])];
       }
     }
     // Insert order
@@ -212,6 +215,77 @@ function place_order(int $userId): array {
     return [true, $orderId];
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    return [false, 'Gagal memproses pesanan'];
+    error_log($e->getMessage()); // Log error for debugging
+    return [false, 'Gagal memproses pesanan. Silakan coba lagi.'];
   }
+}
+
+// Otentikasi Admin
+function is_admin(): bool {
+  $user = current_user();
+  return $user && isset($user['is_admin']) && $user['is_admin'];
+}
+
+function require_admin(): void {
+  if (!is_admin()) {
+    http_response_code(403);
+    exit('Akses ditolak. Anda harus menjadi admin.');
+  }
+}
+
+// CRUD Produk
+function create_product(string $name, string $desc, float $price, int $stock, ?int $catId, ?string $image): int {
+  $stmt = db()->prepare('INSERT INTO products (name, description, price, stock, category_id, main_image) VALUES (?, ?, ?, ?, ?, ?)');
+  $stmt->execute([$name, $desc, $price, $stock, $catId, $image]);
+  return (int)db()->lastInsertId();
+}
+
+function update_product(int $id, string $name, string $desc, float $price, int $stock, ?int $catId, ?string $image): bool {
+  $sql = 'UPDATE products SET name=?, description=?, price=?, stock=?, category_id=?, main_image=? WHERE id=?';
+  $stmt = db()->prepare($sql);
+  return $stmt->execute([$name, $desc, $price, $stock, $catId, $image, $id]);
+}
+
+function delete_product(int $id): bool {
+  $stmt = db()->prepare('DELETE FROM products WHERE id = ?');
+  return $stmt->execute([$id]);
+}
+
+// CRUD Kategori
+function get_category(int $id): ?array {
+    $stmt = db()->prepare('SELECT * FROM categories WHERE id = ?');
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function create_category(string $name, string $desc): int {
+  $stmt = db()->prepare('INSERT INTO categories (name, description) VALUES (?, ?)');
+  $stmt->execute([$name, $desc]);
+  return (int)db()->lastInsertId();
+}
+
+function update_category(int $id, string $name, string $desc): bool {
+  $stmt = db()->prepare('UPDATE categories SET name=?, description=? WHERE id=?');
+  return $stmt->execute([$name, $desc, $id]);
+}
+
+function delete_category(int $id): bool {
+  $stmt = db()->prepare('DELETE FROM categories WHERE id = ?');
+  return $stmt->execute([$id]);
+}
+
+// Pesanan (Orders)
+function get_all_orders(int $limit = 20, int $offset = 0): array {
+    $sql = 'SELECT o.*, u.name as user_name, u.email as user_email
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
+    $stmt = db()->prepare($sql);
+    $stmt->execute([$limit, $offset]);
+    return $stmt->fetchAll();
+}
+
+function count_orders(): int {
+    return (int)db()->query('SELECT COUNT(*) FROM orders')->fetchColumn();
 }
